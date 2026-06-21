@@ -13,6 +13,17 @@ export interface RangeFeatures {
   [rangeName: string]: RangeFeature;
 }
 
+export interface ToggleFeature {
+  featureName: string;
+  instance: string;
+}
+export interface ToggleFeatures {
+  [instance: string]: ToggleFeature;
+}
+export interface ToggleFeaturesByDevice {
+  [entityId: string]: ToggleFeatures;
+}
+
 export const extractRangeFeatures = (
   devices: [Endpoint, SmartHomeDevice][],
 ): RangeFeaturesByDevice => {
@@ -102,3 +113,74 @@ export interface RangeFeature {
   instance: string; // required
   rangeName: string; // required
 }
+
+export const extractToggleFeatures = (
+  devices: [Endpoint, SmartHomeDevice][],
+): ToggleFeaturesByDevice => {
+  const whereValidInfo = ([endpoint, device]: [
+    Endpoint,
+    SmartHomeDevice,
+  ]): O.Option<[string, ToggleFeature[]]> => {
+    const toggleFeatures = pipe(
+      endpoint.features,
+      RA.filterMap((f) =>
+        match(f)
+          .with(
+            {
+              name: 'toggle',
+              instance: Pattern.string,
+            },
+            (_) =>
+              O.of({
+                featureName: _.name,
+                instance: _.instance,
+              } as ToggleFeature),
+          )
+          .otherwise(constant(O.none)),
+      ),
+    );
+    if (toggleFeatures.length === 0) {
+      return O.none;
+    } else {
+      return O.of([device.id, toggleFeatures] as [string, ToggleFeature[]]);
+    }
+  };
+
+  const whereDeviceHasToggleControllers = (tfd: {
+    id: string;
+    toggleFeatures: ToggleFeatures;
+  }) => (Object.keys(tfd.toggleFeatures).length > 0 ? O.of(tfd) : O.none);
+
+  return pipe(
+    O.of(devices),
+    O.map(
+      RA.reduce<
+        [Endpoint, SmartHomeDevice],
+        RR.ReadonlyRecord<string, [Endpoint, SmartHomeDevice]>
+      >({}, (acc, [e, d]) => ({
+        ...acc,
+        [d.id]: [e, d],
+      })),
+    ),
+    O.map(
+      (endpoints) =>
+        pipe(
+          endpoints,
+          RR.filterMap(whereValidInfo),
+          RR.map(([id, toggleFeatures]) => ({
+            id,
+            toggleFeatures: toggleFeatures.reduce((acc, cur) => {
+              acc[cur.instance] = cur;
+              return acc;
+            }, {} as ToggleFeatures),
+          })),
+          RR.filterMap(whereDeviceHasToggleControllers),
+          RR.reduce(S.Ord)({}, (acc, { id, toggleFeatures }) => {
+            acc[id] = toggleFeatures;
+            return acc;
+          }),
+        ) as ToggleFeaturesByDevice,
+    ),
+    O.match(constant({}), identity),
+  );
+};

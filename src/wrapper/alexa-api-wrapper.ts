@@ -30,7 +30,10 @@ import {
   SmartHomeDevice,
   validateGetDevicesSuccessful,
 } from '../domain/alexa/get-devices';
-import { extractRangeFeatures } from '../domain/alexa/save-device-capabilities';
+import {
+  extractRangeFeatures,
+  extractToggleFeatures,
+} from '../domain/alexa/save-device-capabilities';
 import SetDeviceStateResponse, {
   validateSetStateSuccessful,
 } from '../domain/alexa/set-device-state.js';
@@ -39,6 +42,7 @@ import { PluginLogger } from '../util/plugin-logger';
 import {
   AirQualityQuery,
   EndpointsQuery,
+  FanQuery,
   LightQuery,
   LockQuery,
   PowerQuery,
@@ -94,6 +98,7 @@ export class AlexaApiWrapper {
       TE.map(A.filter(([e]) => excludeHomebridgeAlexaPluginDevices(e))),
       TE.tapIO((devices) => {
         this.deviceStore.deviceCapabilities = extractRangeFeatures(devices);
+        this.deviceStore.toggleCapabilities = extractToggleFeatures(devices);
         devices.forEach(([e, d]) => {
           this.log.debug(
             `${d.displayName} ::: Raw device features: ${JSON.stringify(
@@ -130,6 +135,7 @@ export class AlexaApiWrapper {
     const {
       AirQualitySensor,
       CarbonMonoxideSensor,
+      Fanv2,
       HumiditySensor,
       Lightbulb,
       LockMechanism,
@@ -153,6 +159,7 @@ export class AlexaApiWrapper {
                   .with(LockMechanism.UUID, constant(LockQuery))
                   .with(TemperatureSensor.UUID, constant(TempSensorQuery))
                   .with(Thermostat.UUID, constant(ThermostatQuery))
+                  .with(Fanv2.UUID, constant(FanQuery))
                   .with(
                     Pattern.union(
                       CarbonMonoxideSensor.UUID,
@@ -221,11 +228,13 @@ export class AlexaApiWrapper {
     featureName: SupportedFeatures,
     featureOperationName: SupportedActionsType,
     payload: Record<string, unknown> = {},
+    instance?: string,
   ): TaskEither<AlexaApiError, void> {
     const request = {
       endpointId,
       featureOperationName,
       featureName,
+      ...(instance !== undefined ? { instance } : {}),
       ...(Object.keys(payload).length > 0 ? { payload } : {}),
     };
     return pipe(

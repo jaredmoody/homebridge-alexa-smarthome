@@ -12,6 +12,8 @@ import {
 import {
   RangeFeatures,
   RangeFeaturesByDevice,
+  ToggleFeatures,
+  ToggleFeaturesByDevice,
 } from '../domain/alexa/save-device-capabilities';
 import { AlexaPlatformConfig } from '../domain/homebridge';
 import { getOrElseNullable } from '../util/fp-util';
@@ -29,6 +31,7 @@ export default class DeviceStore {
   };
 
   private _deviceCapabilities: RangeFeaturesByDevice = {};
+  private _toggleCapabilities: ToggleFeaturesByDevice = {};
 
   constructor(performanceSettings?: AlexaPlatformConfig['performance']) {
     const cacheTTL = getOrElseNullable(
@@ -49,6 +52,22 @@ export default class DeviceStore {
   getRangeFeaturesForDevice(deviceId: string): RangeFeatures {
     return pipe(
       this.deviceCapabilities,
+      RR.lookup(deviceId),
+      O.match(constant({}), identity),
+    );
+  }
+
+  get toggleCapabilities(): ToggleFeaturesByDevice {
+    return RR.toRecord(this._toggleCapabilities);
+  }
+
+  set toggleCapabilities(toggleCapabilities: ToggleFeaturesByDevice) {
+    this._toggleCapabilities = toggleCapabilities;
+  }
+
+  getToggleFeaturesForDevice(deviceId: string): ToggleFeatures {
+    return pipe(
+      this.toggleCapabilities,
       RR.lookup(deviceId),
       O.match(constant({}), identity),
     );

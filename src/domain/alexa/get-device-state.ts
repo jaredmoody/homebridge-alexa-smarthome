@@ -102,6 +102,7 @@ export const extractStates = (
             O.of({
               ...withCommonProps(_),
               value: _.properties[0].toggleStateValue,
+              instance: _.instance,
             } as CapabilityState),
         )
         .with(
